@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="中学1〜3年の関数を、学年・単元・難易度を選んで学べる数学学習アプリです。"
+    />
+    <title>関数のたしかめ | 中学数学</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="./" aria-label="関数のたしかめ ホーム">
+          <span class="brand-mark" aria-hidden="true">y</span>
+          <span>関数のたしかめ</span>
+        </a>
+        <span class="header-note">中学数学 · 関数</span>
+      </header>
+
+      <main id="app" class="main-content">
+        <section class="welcome-panel" aria-labelledby="page-title">
+          <div class="welcome-copy">
+            <p class="eyebrow">FUNCTIONS / JUNIOR HIGH</p>
+            <h1 id="page-title">関数を、ひとつずつ。</h1>
+            <p class="intro">
+              学年・単元・難易度を選んで、自分に合った関数の問題に挑戦しましょう。何度でも新しい問題に取り組めます。
+            </p>
+          </div>
+          <div class="graph-art" aria-hidden="true">
+            <span class="graph-axis graph-axis-x"></span>
+            <span class="graph-axis graph-axis-y"></span>
+            <span class="graph-line graph-line-one"></span>
+            <span class="graph-line graph-line-two"></span>
+            <span class="graph-dot graph-dot-one"></span>
+            <span class="graph-dot graph-dot-two"></span>
+          </div>
+        </section>
+
+        <section class="grade-section" aria-labelledby="grade-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">CHOOSE YOUR GRADE</p>
+              <h2 id="grade-heading">学年を選ぶ</h2>
+            </div>
+            <p class="section-caption">各学年の関数を確認できます</p>
+          </div>
+          <div id="grade-list" class="grade-list"></div>
+        </section>
+
+        <section id="unit-picker" class="unit-section" aria-labelledby="unit-heading" hidden></section>
+
+        <section id="difficulty-picker" class="difficulty-section" aria-labelledby="difficulty-heading" hidden></section>
+
+        <section id="quiz" class="quiz-section" aria-live="polite" hidden></section>
+
+        <p class="curriculum-note">
+          ※ 中学校数学で扱う関数の基本事項をもとにした問題です。教科書や学校によって、学習する順序・表現が異なる場合があります。
+        </p>
+      </main>
+
+      <footer class="site-footer">
+        <span>関数のたしかめ</span>
+        <span>自分のペースで、確かめよう。</span>
+      </footer>
+    </div>
+  </body>
+</html>
