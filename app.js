@@ -556,6 +556,10 @@ const gradeSection = document.querySelector(".grade-section");
 const unitPicker = document.querySelector("#unit-picker");
 const difficultyPicker = document.querySelector("#difficulty-picker");
 const quizPanel = document.querySelector("#quiz");
+const dashboard = document.querySelector("#learning-dashboard");
+const dashboardContent = document.querySelector("#dashboard-content");
+const storageNotice = document.querySelector("#storage-notice");
+const learningStorageKey = "math-functions-learning-history-v1";
 let activeGrade = null;
 let activeUnit = null;
 let activeDifficulty = null;
@@ -564,6 +568,272 @@ let questionIndex = 0;
 let score = 0;
 let selectedAnswer = null;
 let explanationVisible = false;
+let storageMessage = "";
+
+function emptyLearningData() {
+  return { days: {} };
+}
+
+function loadLearningData() {
+  try {
+    const stored = localStorage.getItem(learningStorageKey);
+    if (!stored) return emptyLearningData();
+
+    const parsed = JSON.parse(stored);
+    if (!parsed || typeof parsed.days !== "object" || Array.isArray(parsed.days)) {
+      throw new Error("Invalid learning history format");
+    }
+    const validCount = (value) => Number.isInteger(value) && value >= 0;
+    for (const day of Object.values(parsed.days)) {
+      if (
+        !day ||
+        !validCount(day.answered) ||
+        !validCount(day.correct) ||
+        day.correct > day.answered ||
+        !day.units ||
+        typeof day.units !== "object" ||
+        Array.isArray(day.units)
+      ) {
+        throw new Error("Invalid daily learning history");
+      }
+      for (const stats of Object.values(day.units)) {
+        if (
+          !stats ||
+          !validCount(stats.answered) ||
+          !validCount(stats.correct) ||
+          stats.correct > stats.answered
+        ) {
+          throw new Error("Invalid unit learning history");
+        }
+      }
+    }
+
+    return parsed;
+  } catch {
+    storageMessage = "学習記録を読み込めませんでした。ブラウザーの保存設定をご確認ください。";
+    return emptyLearningData();
+  }
+}
+
+let learningData = loadLearningData();
+
+function localDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function saveLearningData() {
+  try {
+    localStorage.setItem(learningStorageKey, JSON.stringify(learningData));
+    storageMessage = "";
+  } catch {
+    storageMessage = "学習記録を保存できませんでした。ブラウザーの保存領域をご確認ください。";
+  }
+}
+
+function recordAnswer(isCorrect) {
+  const date = localDateKey();
+  const day = learningData.days[date] ?? { answered: 0, correct: 0, units: {} };
+  const unit = day.units[activeUnit] ?? { answered: 0, correct: 0 };
+
+  day.answered += 1;
+  day.correct += Number(isCorrect);
+  unit.answered += 1;
+  unit.correct += Number(isCorrect);
+  day.units[activeUnit] = unit;
+  learningData.days[date] = day;
+  saveLearningData();
+  renderDashboard();
+}
+
+function getLearningTotals() {
+  return Object.values(learningData.days).reduce(
+    (totals, day) => ({
+      answered: totals.answered + (Number(day.answered) || 0),
+      correct: totals.correct + (Number(day.correct) || 0),
+    }),
+    { answered: 0, correct: 0 },
+  );
+}
+
+function getStudyStreak() {
+  const studiedDates = new Set(
+    Object.entries(learningData.days)
+      .filter(([, day]) => day.answered > 0)
+      .map(([date]) => date),
+  );
+  const today = new Date();
+  if (!studiedDates.has(localDateKey(today))) today.setDate(today.getDate() - 1);
+
+  let streak = 0;
+  while (studiedDates.has(localDateKey(today))) {
+    streak += 1;
+    today.setDate(today.getDate() - 1);
+  }
+  return streak;
+}
+
+function getEncouragement(answered, accuracy, streak) {
+  if (answered === 0) {
+    return {
+      title: "最初の1問が、学びの一歩。",
+      message: "気になる単元を選んでみましょう。取り組んだ分だけ、ここに足あとが増えていきます。",
+    };
+  }
+  if (streak >= 3) {
+    return {
+      title: `${streak}日連続の学習、すばらしい！`,
+      message: "続ける力も大切な力。今日の一歩も、きっと明日の自信につながります。",
+    };
+  }
+  if (accuracy >= 80) {
+    return {
+      title: "着実に身についています！",
+      message: "正解が増えてきましたね。次は少し難しい問題にも挑戦してみましょう。",
+    };
+  }
+  if (accuracy < 50) {
+    return {
+      title: "挑戦したことが、もう前進です。",
+      message: "間違いは大切なヒント。解説を見ながら、やさしい問題で一つずつ確かめていきましょう。",
+    };
+  }
+  return {
+    title: "一問ずつ、力がついています。",
+    message: "続けて取り組むことで、関数の見方が少しずつ身についていきます。",
+  };
+}
+
+function formatShortDate(date) {
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function renderDashboard() {
+  const totals = getLearningTotals();
+  const accuracy = totals.answered
+    ? Math.round((totals.correct / totals.answered) * 100)
+    : 0;
+  const streak = getStudyStreak();
+  const encouragement = getEncouragement(totals.answered, accuracy, streak);
+  const today = new Date();
+  const week = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (6 - index));
+    const key = localDateKey(date);
+    const day = learningData.days[key] ?? { answered: 0, correct: 0 };
+    return {
+      date,
+      answered: Number(day.answered) || 0,
+      correct: Number(day.correct) || 0,
+    };
+  });
+  const scale = Math.max(5, ...week.map((day) => day.answered));
+  const unitStats = Object.entries(quizzes).flatMap(([grade, quiz]) =>
+    quiz.units.map((unit) => {
+      const totalsForUnit = Object.values(learningData.days).reduce(
+        (total, day) => {
+          const stats = day.units?.[unit.id];
+          return {
+            answered: total.answered + (Number(stats?.answered) || 0),
+            correct: total.correct + (Number(stats?.correct) || 0),
+          };
+        },
+        { answered: 0, correct: 0 },
+      );
+      return { grade, unit, ...totalsForUnit };
+    }),
+  );
+
+  dashboardContent.innerHTML = `
+    <div class="stat-grid">
+      <article class="stat-card">
+        <span class="stat-label">解いた問題</span>
+        <strong class="stat-value">${totals.answered}<span>問</span></strong>
+        <span class="stat-caption">今日までの累計</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-label">正解率</span>
+        <strong class="stat-value">${accuracy}<span>%</span></strong>
+        <span class="stat-caption">${totals.correct}問正解 / ${totals.answered}問</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-label">学習日数</span>
+        <strong class="stat-value">${streak}<span>日</span></strong>
+        <span class="stat-caption">現在の連続記録</span>
+      </article>
+    </div>
+    <div class="dashboard-grid">
+      <article class="dashboard-card activity-card">
+        <div class="dashboard-card-heading">
+          <div>
+            <p class="eyebrow">LAST 7 DAYS</p>
+            <h3>今週の学習</h3>
+          </div>
+          <span class="chart-legend"><i class="legend-correct"></i>正解 <i class="legend-incorrect"></i>もう一歩</span>
+        </div>
+        <div class="activity-chart" role="img" aria-label="過去7日間の学習問題数。棒の濃い部分が正解数、薄い部分が不正解数です。">
+          ${week
+            .map((day) => {
+              const incorrect = Math.max(0, day.answered - day.correct);
+              const correctHeight = day.answered ? (day.correct / scale) * 100 : 0;
+              const incorrectHeight = day.answered ? (incorrect / scale) * 100 : 0;
+              const dayName = day.date.toLocaleDateString("ja-JP", { weekday: "short" });
+              return `
+                <div class="activity-day" aria-label="${formatShortDate(day.date)} ${day.answered}問、正解${day.correct}問">
+                  <span class="activity-count">${day.answered || ""}</span>
+                  <div class="activity-bar-track">
+                    <span class="activity-bar-incorrect" style="height:${incorrectHeight}%"></span>
+                    <span class="activity-bar-correct" style="height:${correctHeight}%"></span>
+                  </div>
+                  <span class="activity-day-label">${dayName}</span>
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+        <p class="chart-caption">棒が高いほど、たくさん取り組んだ日です。</p>
+      </article>
+      <article class="dashboard-card encouragement-card">
+        <span class="encouragement-icon" aria-hidden="true">✦</span>
+        <p class="eyebrow">A LITTLE ENCOURAGEMENT</p>
+        <h3>${encouragement.title}</h3>
+        <p>${encouragement.message}</p>
+      </article>
+    </div>
+    <article class="dashboard-card unit-progress-card">
+      <div class="dashboard-card-heading">
+        <div>
+          <p class="eyebrow">YOUR PRACTICE</p>
+          <h3>単元ごとの足あと</h3>
+        </div>
+        <span class="section-caption">どの単元も、練習した分だけ記録されます</span>
+      </div>
+      <div class="unit-progress-list">
+        ${unitStats
+          .map(({ grade, unit, answered, correct }) => {
+            const rate = answered ? Math.round((correct / answered) * 100) : 0;
+            return `
+              <div class="unit-progress-row">
+                <div class="unit-progress-name">
+                  <span>中${grade} · ${unit.name}</span>
+                  <strong>${answered ? `${answered}問 · 正解率 ${rate}%` : "これから挑戦"}</strong>
+                </div>
+                <div class="unit-progress-track" role="progressbar" aria-label="中学${grade} ${unit.name}の正解率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${rate}">
+                  <span style="width:${rate}%"></span>
+                </div>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    </article>
+  `;
+
+  storageNotice.textContent = storageMessage;
+  storageNotice.hidden = !storageMessage;
+}
 
 const gradeNames = {
   1: "中学1年",
@@ -619,6 +889,7 @@ function renderGradeCards() {
 
 function selectGrade(grade) {
   activeGrade = grade;
+  dashboard.hidden = true;
   gradeSection.hidden = true;
   unitPicker.hidden = false;
   quizPanel.hidden = true;
@@ -670,7 +941,9 @@ unitPicker.addEventListener("click", (event) => {
 
   if (button.dataset.action === "grades") {
     unitPicker.hidden = true;
+    dashboard.hidden = false;
     gradeSection.hidden = false;
+    renderDashboard();
     gradeSection.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 });
@@ -874,9 +1147,11 @@ quizPanel.addEventListener("click", (event) => {
 
   if (button.dataset.answer !== undefined && selectedAnswer === null) {
     selectedAnswer = Number(button.dataset.answer);
-    if (selectedAnswer === getActiveQuestions()[questionIndex].answer) {
+    const isCorrect = selectedAnswer === getActiveQuestions()[questionIndex].answer;
+    if (isCorrect) {
       score += 1;
     }
+    recordAnswer(isCorrect);
     renderQuestion();
     return;
   }
@@ -917,3 +1192,4 @@ quizPanel.addEventListener("click", (event) => {
 });
 
 renderGradeCards();
+renderDashboard();
